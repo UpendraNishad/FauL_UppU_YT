@@ -11,6 +11,8 @@ import android.media.AudioManager
 import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
+import android.util.Log
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.MotionEvent
@@ -30,6 +32,7 @@ class MenuService : Service() {
     private lateinit var menuView: View
     private lateinit var bubbleParams: WindowManager.LayoutParams
     private lateinit var menuParams: WindowManager.LayoutParams
+    private lateinit var audioManager: AudioManager
 
     companion object {
         var isServiceRunning = false
@@ -42,6 +45,7 @@ class MenuService : Service() {
         super.onCreate()
         isServiceRunning = true
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         val themedContext = ContextThemeWrapper(this, R.style.Theme_FauL_UppU_YT)
         val inflater = LayoutInflater.from(themedContext)
 
@@ -50,10 +54,8 @@ class MenuService : Service() {
 
         setupWindowParameters()
 
-        // Add menu first to place it behind the bubble
         menuView.visibility = View.GONE
         windowManager.addView(menuView, menuParams)
-        // Add bubble second to ensure it's always on top
         windowManager.addView(bubbleView, bubbleParams)
 
         setupBubbleTouchListener()
@@ -78,9 +80,17 @@ class MenuService : Service() {
             y = lastBubbleY
         }
 
+        // --- THIS IS THE FIX ---
+        // Convert your desired dp values to pixels for the WindowManager
+        val widthInDp = 240
+        val heightInDp = 280
+        val metrics = resources.displayMetrics
+        val widthInPixels = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, widthInDp.toFloat(), metrics).toInt()
+        val heightInPixels = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, heightInDp.toFloat(), metrics).toInt()
+
         menuParams = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
+            widthInPixels,  // Use the fixed pixel width
+            heightInPixels, // Use the fixed pixel height
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY else WindowManager.LayoutParams.TYPE_PHONE,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
             PixelFormat.TRANSLUCENT
@@ -93,12 +103,11 @@ class MenuService : Service() {
         if (menuView.visibility == View.VISIBLE) {
             menuView.visibility = View.GONE
         } else {
-            // Sync switch states and sliders before showing
+            // Sync all controls before showing
             menuView.findViewById<SwitchCompat>(R.id.switch_web_alert).isChecked = AlertService.isServiceRunning
             menuView.findViewById<SwitchCompat>(R.id.switch_image_overlay).isChecked = OverlayService.isServiceRunning
+            menuView.findViewById<SwitchCompat>(R.id.switch_mic_mute).isChecked = audioManager.isMicrophoneMute
 
-            // Update sliders with current system values
-            val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
             val volumeSeekBar = menuView.findViewById<SeekBar>(R.id.seekBar_volume)
             volumeSeekBar.progress = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
 
@@ -114,11 +123,11 @@ class MenuService : Service() {
     private fun setupMenuControls() {
         val imageOverlaySwitch = menuView.findViewById<SwitchCompat>(R.id.switch_image_overlay)
         val webAlertSwitch = menuView.findViewById<SwitchCompat>(R.id.switch_web_alert)
+        val micMuteSwitch = menuView.findViewById<SwitchCompat>(R.id.switch_mic_mute)
         val closeBubbleButton = menuView.findViewById<Button>(R.id.btn_close_bubble)
         val brightnessSeekBar = menuView.findViewById<SeekBar>(R.id.seekBar_brightness)
         val volumeSeekBar = menuView.findViewById<SeekBar>(R.id.seekBar_volume)
 
-        // --- Original Switch Controls ---
         imageOverlaySwitch.setOnCheckedChangeListener { _, isChecked ->
             if (isChecked) {
                 val prefs = getSharedPreferences("AppPrefs", MODE_PRIVATE)
@@ -163,7 +172,20 @@ class MenuService : Service() {
             stopSelf()
         }
 
-        // --- NEW: Brightness Control Logic ---
+        micMuteSwitch.setOnCheckedChangeListener { _, isChecked ->
+            try {
+                audioManager.isMicrophoneMute = isChecked
+                if (isChecked) {
+                    Toast.makeText(this, "Microphone MUTED", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this, "Microphone UNMUTED", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: SecurityException) {
+                Toast.makeText(this, "Error: Permission to modify audio settings denied.", Toast.LENGTH_LONG).show()
+                Log.e("MenuService", "Mic Mute SecurityException", e)
+            }
+        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Settings.System.canWrite(this)) {
             brightnessSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
@@ -178,8 +200,6 @@ class MenuService : Service() {
             brightnessSeekBar.isEnabled = false
         }
 
-        // --- NEW: Volume Control Logic ---
-        val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
         volumeSeekBar.max = maxVolume
 
@@ -251,6 +271,16 @@ class MenuService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         isServiceRunning = false
+
+        try {
+            if(audioManager.isMicrophoneMute) {
+                audioManager.isMicrophoneMute = false
+                Toast.makeText(this, "Microphone UNMUTED automatically.", Toast.LENGTH_SHORT).show()
+            }
+        } catch (e: SecurityException) {
+            Log.e("MenuService", "Could not unmute mic on destroy", e)
+        }
+
         stopService(Intent(this, OverlayService::class.java))
         stopService(Intent(this, AlertService::class.java))
 

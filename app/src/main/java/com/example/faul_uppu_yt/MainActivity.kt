@@ -1,6 +1,10 @@
 package com.example.faul_uppu_yt
 
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -10,6 +14,7 @@ import android.widget.EditText
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 
 class MainActivity : AppCompatActivity() {
 
@@ -22,17 +27,20 @@ class MainActivity : AppCompatActivity() {
             val prefs = getSharedPreferences("AppPrefs", MODE_PRIVATE)
             prefs.edit().putString("LAST_IMAGE_URI", it.toString()).apply()
             Toast.makeText(this, "Image saved for quick toggle!", Toast.LENGTH_SHORT).show()
-
-            startOverlayWithUri(it)
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        setTitle("FauL UppU YT")
+        setTitle("  FauL UppU YT") // Added spaces for padding
         checkOverlayPermission()
-        checkWriteSettingsPermission() // <-- THIS IS THE NEW LINE
+        checkWriteSettingsPermission()
+
+        // These lines display a smaller version of your app's logo
+        supportActionBar?.setDisplayShowHomeEnabled(true)
+        supportActionBar?.setDisplayUseLogoEnabled(true)
+        supportActionBar?.setLogo(getScaledLogo(R.mipmap.ic_launcher_round))
 
         val urlEditText = findViewById<EditText>(R.id.et_url)
         val widthEditText = findViewById<EditText>(R.id.et_width)
@@ -50,7 +58,6 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btn_launch_menu).setOnClickListener {
             if (!MenuService.isServiceRunning) {
                 startService(Intent(this, MenuService::class.java))
-                Toast.makeText(this, "Floating Menu Launched", Toast.LENGTH_SHORT).show()
             } else {
                 Toast.makeText(this, "Menu is already running", Toast.LENGTH_SHORT).show()
             }
@@ -88,11 +95,20 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun startOverlayWithUri(uri: Uri) {
-        val intent = Intent(this, OverlayService::class.java).apply {
-            putExtra("image_uri", uri.toString())
-        }
-        startService(intent)
+    // This function resizes the logo to make it smaller
+    private fun getScaledLogo(drawableId: Int): Drawable {
+        val drawable = ContextCompat.getDrawable(this, drawableId)
+        val desiredHeightDp = 40
+        val desiredWidthDp = 40
+        val density = resources.displayMetrics.density
+        val desiredWidth = (desiredWidthDp * density).toInt()
+        val desiredHeight = (desiredHeightDp * density).toInt()
+
+        val bitmap = Bitmap.createBitmap(desiredWidth, desiredHeight, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        drawable?.setBounds(0, 0, canvas.width, canvas.height)
+        drawable?.draw(canvas)
+        return BitmapDrawable(resources, bitmap)
     }
 
     private fun checkOverlayPermission() {
@@ -102,10 +118,8 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // NEW FUNCTION TO ASK FOR BRIGHTNESS PERMISSION
     private fun checkWriteSettingsPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.System.canWrite(this)) {
-            Toast.makeText(this, "Please grant 'Modify system settings' permission for brightness control.", Toast.LENGTH_LONG).show()
             val intent = Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS).apply {
                 data = Uri.parse("package:$packageName")
             }
