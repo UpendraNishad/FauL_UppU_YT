@@ -7,14 +7,17 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
+import android.media.AudioManager
 import android.os.Build
 import android.os.IBinder
+import android.provider.Settings
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.Button
+import android.widget.SeekBar
 import android.widget.Toast
 import androidx.appcompat.view.ContextThemeWrapper
 import androidx.appcompat.widget.SwitchCompat
@@ -25,7 +28,6 @@ class MenuService : Service() {
     private lateinit var windowManager: WindowManager
     private lateinit var bubbleView: View
     private lateinit var menuView: View
-
     private lateinit var bubbleParams: WindowManager.LayoutParams
     private lateinit var menuParams: WindowManager.LayoutParams
 
@@ -48,9 +50,11 @@ class MenuService : Service() {
 
         setupWindowParameters()
 
-        windowManager.addView(bubbleView, bubbleParams)
+        // Add menu first to place it behind the bubble
         menuView.visibility = View.GONE
         windowManager.addView(menuView, menuParams)
+        // Add bubble second to ensure it's always on top
+        windowManager.addView(bubbleView, bubbleParams)
 
         setupBubbleTouchListener()
         setupMenuControls()
@@ -58,10 +62,9 @@ class MenuService : Service() {
     }
 
     private fun setupWindowParameters() {
-        // Read saved positions for the bubble
         val prefs = getSharedPreferences("AppPrefs", MODE_PRIVATE)
-        val lastBubbleX = prefs.getInt("BUBBLE_X", 0)       // Default to 0 if not found
-        val lastBubbleY = prefs.getInt("BUBBLE_Y", 100)     // Default to 100 if not found
+        val lastBubbleX = prefs.getInt("BUBBLE_X", 0)
+        val lastBubbleY = prefs.getInt("BUBBLE_Y", 100)
 
         bubbleParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -71,8 +74,8 @@ class MenuService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = lastBubbleX  // Use the saved X position
-            y = lastBubbleY  // Use the saved Y position
+            x = lastBubbleX
+            y = lastBubbleY
         }
 
         menuParams = WindowManager.LayoutParams(
@@ -90,9 +93,20 @@ class MenuService : Service() {
         if (menuView.visibility == View.VISIBLE) {
             menuView.visibility = View.GONE
         } else {
-            // Sync switch states before showing
+            // Sync switch states and sliders before showing
             menuView.findViewById<SwitchCompat>(R.id.switch_web_alert).isChecked = AlertService.isServiceRunning
             menuView.findViewById<SwitchCompat>(R.id.switch_image_overlay).isChecked = OverlayService.isServiceRunning
+
+            // Update sliders with current system values
+            val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            val volumeSeekBar = menuView.findViewById<SeekBar>(R.id.seekBar_volume)
+            volumeSeekBar.progress = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+
+            val brightnessSeekBar = menuView.findViewById<SeekBar>(R.id.seekBar_brightness)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Settings.System.canWrite(this)) {
+                brightnessSeekBar.progress = Settings.System.getInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS)
+            }
+
             menuView.visibility = View.VISIBLE
         }
     }
@@ -101,12 +115,14 @@ class MenuService : Service() {
         val imageOverlaySwitch = menuView.findViewById<SwitchCompat>(R.id.switch_image_overlay)
         val webAlertSwitch = menuView.findViewById<SwitchCompat>(R.id.switch_web_alert)
         val closeBubbleButton = menuView.findViewById<Button>(R.id.btn_close_bubble)
+        val brightnessSeekBar = menuView.findViewById<SeekBar>(R.id.seekBar_brightness)
+        val volumeSeekBar = menuView.findViewById<SeekBar>(R.id.seekBar_volume)
 
+        // --- Original Switch Controls ---
         imageOverlaySwitch.setOnCheckedChangeListener { _, isChecked ->
             if (isChecked) {
                 val prefs = getSharedPreferences("AppPrefs", MODE_PRIVATE)
                 val uriString = prefs.getString("LAST_IMAGE_URI", null)
-
                 if (uriString != null) {
                     val intent = Intent(this, OverlayService::class.java).apply {
                         putExtra("image_uri", uriString)
@@ -126,6 +142,7 @@ class MenuService : Service() {
                 val prefs = getSharedPreferences("AppPrefs", MODE_PRIVATE)
                 val url = prefs.getString("URL", "")
                 if (url.isNullOrEmpty()) {
+                    Toast.makeText(this, "Set a URL in the main app first.", Toast.LENGTH_SHORT).show()
                     webAlertSwitch.isChecked = false
                     return@setOnCheckedChangeListener
                 }
@@ -145,14 +162,44 @@ class MenuService : Service() {
         closeBubbleButton.setOnClickListener {
             stopSelf()
         }
+
+        // --- NEW: Brightness Control Logic ---
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Settings.System.canWrite(this)) {
+            brightnessSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                    if (fromUser) {
+                        Settings.System.putInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS, progress)
+                    }
+                }
+                override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+                override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+            })
+        } else {
+            brightnessSeekBar.isEnabled = false
+        }
+
+        // --- NEW: Volume Control Logic ---
+        val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        volumeSeekBar.max = maxVolume
+
+        volumeSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                if (fromUser) {
+                    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, progress, 0)
+                }
+            }
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        })
     }
 
     @SuppressLint("ClickableViewAccessibility")
     private fun setupBubbleTouchListener() {
-        var initialX: Int = 0
-        var initialY: Int = 0
-        var initialTouchX: Float = 0f
-        var initialTouchY: Float = 0f
+        var initialX = 0
+        var initialY = 0
+        var initialTouchX = 0f
+        var initialTouchY = 0f
 
         bubbleView.setOnTouchListener { _, event ->
             when (event.action) {
@@ -164,14 +211,12 @@ class MenuService : Service() {
                     return@setOnTouchListener true
                 }
                 MotionEvent.ACTION_UP -> {
-                    // Save the position when the user lets go
                     val prefs = getSharedPreferences("AppPrefs", MODE_PRIVATE)
                     prefs.edit().apply {
                         putInt("BUBBLE_X", bubbleParams.x)
                         putInt("BUBBLE_Y", bubbleParams.y)
                         apply()
                     }
-
                     val isClick = kotlin.math.abs(event.rawX - initialTouchX) < 10 && kotlin.math.abs(event.rawY - initialTouchY) < 10
                     if (isClick) {
                         toggleMenuVisibility()

@@ -19,7 +19,6 @@ class MainActivity : AppCompatActivity() {
                 contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION)
             } catch (_: Exception) { }
 
-            // Save the chosen image URI so the menu can use it
             val prefs = getSharedPreferences("AppPrefs", MODE_PRIVATE)
             prefs.edit().putString("LAST_IMAGE_URI", it.toString()).apply()
             Toast.makeText(this, "Image saved for quick toggle!", Toast.LENGTH_SHORT).show()
@@ -33,6 +32,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
         setTitle("FauL UppU YT")
         checkOverlayPermission()
+        checkWriteSettingsPermission() // <-- THIS IS THE NEW LINE
 
         val urlEditText = findViewById<EditText>(R.id.et_url)
         val widthEditText = findViewById<EditText>(R.id.et_width)
@@ -69,7 +69,6 @@ class MainActivity : AppCompatActivity() {
             val url = urlEditText.text.toString().trim()
             if (url.isNotEmpty()) {
                 val editor = prefs.edit()
-
                 val width = widthEditText.text.toString().toIntOrNull() ?: 400
                 val height = heightEditText.text.toString().toIntOrNull() ?: 300
                 val x = xEditText.text.toString().toIntOrNull() ?: 50
@@ -99,6 +98,17 @@ class MainActivity : AppCompatActivity() {
     private fun checkOverlayPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
             val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
+            startActivity(intent)
+        }
+    }
+
+    // NEW FUNCTION TO ASK FOR BRIGHTNESS PERMISSION
+    private fun checkWriteSettingsPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.System.canWrite(this)) {
+            Toast.makeText(this, "Please grant 'Modify system settings' permission for brightness control.", Toast.LENGTH_LONG).show()
+            val intent = Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS).apply {
+                data = Uri.parse("package:$packageName")
+            }
             startActivity(intent)
         }
     }

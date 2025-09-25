@@ -2,6 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/menu_panel"
     android:layout_width="wrap_content"
+    android:minWidth="240dp"
     android:layout_height="wrap_content"
     android:layout_gravity="center"
     android:background="@drawable/menu_background"
@@ -22,19 +23,16 @@
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
         android:orientation="horizontal">
-
         <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="Image/GIF Overlay"
             android:textColor="@android:color/white" />
-
         <androidx.appcompat.widget.SwitchCompat
             android:id="@+id/switch_image_overlay"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content" />
-
     </LinearLayout>
 
     <LinearLayout
@@ -43,20 +41,42 @@
         android:gravity="center_vertical"
         android:layout_marginTop="8dp"
         android:orientation="horizontal">
-
         <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="Subscribe Alert"
             android:textColor="@android:color/white" />
-
         <androidx.appcompat.widget.SwitchCompat
             android:id="@+id/switch_web_alert"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content" />
-
     </LinearLayout>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="Brightness"
+        android:textColor="@android:color/white" />
+    <SeekBar
+        android:id="@+id/seekBar_brightness"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:max="255" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Volume"
+        android:textColor="@android:color/white" />
+    <SeekBar
+        android:id="@+id/seekBar_volume"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp" />
 
     <Button
         android:id="@+id/btn_close_bubble"
