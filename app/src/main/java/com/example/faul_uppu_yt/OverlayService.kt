@@ -71,6 +71,7 @@ class OverlayService : Service() {
         val prefs = getSharedPreferences("AppPrefs", MODE_PRIVATE)
         val lastX = prefs.getInt("OVERLAY_X", 0)
         val lastY = prefs.getInt("OVERLAY_Y", 100)
+        // Start with WRAP_CONTENT to let the first image determine the size.
         val lastWidth = prefs.getInt("OVERLAY_WIDTH", WindowManager.LayoutParams.WRAP_CONTENT)
         val lastHeight = prefs.getInt("OVERLAY_HEIGHT", WindowManager.LayoutParams.WRAP_CONTENT)
 
@@ -102,15 +103,19 @@ class OverlayService : Service() {
             .load(uri)
             .listener(object : RequestListener<Drawable> {
                 override fun onLoadFailed(e: GlideException?, model: Any?, target: Target<Drawable>, isFirstResource: Boolean): Boolean { return false }
+
                 override fun onResourceReady(resource: Drawable, model: Any, target: Target<Drawable>?, dataSource: DataSource, isFirstResource: Boolean): Boolean {
-                    if (params.width == WindowManager.LayoutParams.WRAP_CONTENT) {
-                        val aspectRatio = resource.intrinsicWidth.toFloat() / resource.intrinsicHeight.toFloat()
-                        val initialWidth = (resources.displayMetrics.density * 200).toInt()
-                        val initialHeight = (initialWidth / aspectRatio).toInt()
-                        updateOverlaySize(initialWidth, initialHeight)
-                        saveOverlayState()
-                    }
-                    return false
+                    // --- THIS IS THE FIX ---
+                    // This logic now runs EVERY time a new image is loaded, not just the first time.
+                    // It resets the window to a default width while maintaining the new image's aspect ratio.
+                    val aspectRatio = resource.intrinsicWidth.toFloat() / resource.intrinsicHeight.toFloat()
+                    val newWidth = (resources.displayMetrics.density * 200).toInt() // Reset to a consistent 200dp width
+                    val newHeight = (newWidth / aspectRatio).toInt()
+
+                    updateOverlaySize(newWidth, newHeight)
+                    saveOverlayState() // Save the new size immediately
+
+                    return false // Let Glide continue its work
                 }
             })
             .into(imageView)

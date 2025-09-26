@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "341429430387",
+    "project_id": "uppu-streams",
+    "storage_bucket": "uppu-streams.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:341429430387:android:6c1128b17f570c27692206",
+        "android_client_info": {
+          "package_name": "com.example.faul_uppu_yt"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBFen49l11aoFfxZGQqX0-2T49PP7UQ2U0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

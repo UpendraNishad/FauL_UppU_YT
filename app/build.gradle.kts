@@ -2,6 +2,8 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.kapt")
+    // ADD THIS LINE
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -42,5 +44,11 @@ dependencies {
     implementation("androidx.dynamicanimation:dynamicanimation:1.0.0")
     implementation("com.github.bumptech.glide:glide:4.16.0")
     kapt("com.github.bumptech.glide:compiler:4.16.0")
-    implementation("com.google.android.material:material:1.13.0-alpha03")
+    implementation("com.google.android.material:material:1.12.0")
+
+    // ADD THESE LINES FOR FIREBASE
+    // Import the Firebase BoM (Bill of Materials) - this helps manage library versions
+    implementation(platform("com.google.firebase:firebase-bom:32.3.1"))
+    // Add the dependency for the Firestore database
+    implementation("com.google.firebase:firebase-firestore-ktx")
 }
