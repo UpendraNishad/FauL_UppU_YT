@@ -147,15 +147,15 @@ class MainActivity : AppCompatActivity() {
         val urlEditText = findViewById<EditText>(R.id.et_url)
         val widthEditText = findViewById<EditText>(R.id.et_width)
         val heightEditText = findViewById<EditText>(R.id.et_height)
-        val xEditText = findViewById<EditText>(R.id.et_x) // Re-added
-        val yEditText = findViewById<EditText>(R.id.et_y) // Re-added
+        val xEditText = findViewById<EditText>(R.id.et_x)
+        val yEditText = findViewById<EditText>(R.id.et_y)
 
         val prefs = getSharedPreferences("AppPrefs", MODE_PRIVATE)
         urlEditText.setText(prefs.getString("URL", ""))
         widthEditText.setText(prefs.getInt("WIDTH", 400).toString())
         heightEditText.setText(prefs.getInt("HEIGHT", 300).toString())
-        xEditText.setText(prefs.getInt("X_POS", 50).toString()) // Re-added
-        yEditText.setText(prefs.getInt("Y_POS", 100).toString()) // Re-added
+        xEditText.setText(prefs.getInt("X_POS", 50).toString())
+        yEditText.setText(prefs.getInt("Y_POS", 100).toString())
 
         findViewById<Button>(R.id.btn_launch_menu).setOnClickListener {
             if (!MenuService.isServiceRunning) {
@@ -169,10 +169,8 @@ class MainActivity : AppCompatActivity() {
             pickImageLauncher.launch(arrayOf("image/*", "image/gif"))
         }
 
-        findViewById<Button>(R.id.btn_stop_image_overlay).setOnClickListener {
-            stopService(Intent(this, OverlayService::class.java))
-            Toast.makeText(this, "Image overlay stopped", Toast.LENGTH_SHORT).show()
-        }
+        // --- THIS IS THE FIX ---
+        // The listener for the "Stop Overlay" button has been removed.
 
         findViewById<Button>(R.id.btn_save_web_settings).setOnClickListener {
             val url = urlEditText.text.toString().trim()
@@ -180,14 +178,14 @@ class MainActivity : AppCompatActivity() {
                 val editor = prefs.edit()
                 val width = widthEditText.text.toString().toIntOrNull() ?: 400
                 val height = heightEditText.text.toString().toIntOrNull() ?: 300
-                val x = xEditText.text.toString().toIntOrNull() ?: 50 // Re-added
-                val y = yEditText.text.toString().toIntOrNull() ?: 100 // Re-added
+                val x = xEditText.text.toString().toIntOrNull() ?: 50
+                val y = yEditText.text.toString().toIntOrNull() ?: 100
 
                 editor.putString("URL", url)
                 editor.putInt("WIDTH", width)
                 editor.putInt("HEIGHT", height)
-                editor.putInt("X_POS", x) // Re-added
-                editor.putInt("Y_POS", y) // Re-added
+                editor.putInt("X_POS", x)
+                editor.putInt("Y_POS", y)
                 editor.apply()
                 Toast.makeText(this, "Subscriber Alert Settings Saved!", Toast.LENGTH_SHORT).show()
             } else {
@@ -294,4 +292,3 @@ class MainActivity : AppCompatActivity() {
         }
     }
 }
-

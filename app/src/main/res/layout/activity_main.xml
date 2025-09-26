@@ -65,13 +65,8 @@
                             android:layout_marginTop="8dp"
                             android:text="Select Image/GIF Overlay"/>
 
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/btn_stop_image_overlay"
-                            style="@style/Widget.Material3.Button.TextButton"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_gravity="end"
-                            android:text="Stop Overlay"/>
+                        <!-- The "Stop Overlay" button has been removed from here -->
+
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
@@ -101,7 +96,8 @@
                             <com.google.android.material.textfield.TextInputEditText
                                 android:id="@+id/et_url"
                                 android:layout_width="match_parent"
-                                android:layout_height="wrap_content"/>
+                                android:layout_height="wrap_content"
+                                android:singleLine="true" />
                         </com.google.android.material.textfield.TextInputLayout>
 
                         <LinearLayout
@@ -134,7 +130,6 @@
                             </com.google.android.material.textfield.TextInputLayout>
                         </LinearLayout>
 
-                        <!-- THIS IS THE FIX - X and Y Fields Re-added -->
                         <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
