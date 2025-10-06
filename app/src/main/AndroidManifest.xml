@@ -37,6 +37,10 @@
             android:name=".MenuService"
             android:exported="false" />
 
+        <service
+            android:name=".FloatingBrowserService"
+            android:exported="false" />s
+
     </application>
 
 </manifest>

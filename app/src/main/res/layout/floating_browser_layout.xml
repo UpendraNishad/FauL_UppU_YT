@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This outer FrameLayout acts as a visible border -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#6750A4"
+    android:padding="2dp">
+
+    <!-- This LinearLayout vertically stacks the handle and the WebView -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#1C1B1F"
+        android:orientation="vertical">
+
+        <!-- A dedicated and visible handle for dragging the window -->
+        <View
+            android:id="@+id/drag_handle"
+            android:layout_width="match_parent"
+            android:layout_height="15dp"
+            android:background="#80332D41" /> <!-- A darker semi-transparent color for better contrast -->
+
+        <WebView
+            android:id="@+id/floating_webview"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+    </LinearLayout>
+</FrameLayout>
+

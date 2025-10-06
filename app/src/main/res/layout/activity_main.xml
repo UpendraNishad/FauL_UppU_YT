@@ -65,8 +65,6 @@
                             android:layout_marginTop="8dp"
                             android:text="Select Image/GIF Overlay"/>
 
-                        <!-- The "Stop Overlay" button has been removed from here -->
-
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
@@ -168,6 +166,63 @@
                             android:text="Save Alert Settings"/>
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
+
+                <!-- Live Subscriber Count Card -->
+                <com.google.android.material.card.MaterialCardView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    app:cardElevation="2dp"
+                    app:cardCornerRadius="12dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="16dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Live Subscriber Count"
+                            android:textAppearance="?attr/textAppearanceTitleMedium"
+                            android:layout_marginBottom="8dp"/>
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:hint="Enter Subscriber Count URL">
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/et_sub_count_url"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:singleLine="true"/>
+                        </com.google.android.material.textfield.TextInputLayout>
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="16dp"
+                            android:orientation="horizontal">
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/btn_launch_sub_count"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="Launch &amp; Save"/>
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/btn_stop_sub_count"
+                                style="@style/Widget.Material3.Button.OutlinedButton"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="8dp"
+                                android:text="Stop"/>
+                        </LinearLayout>
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
             </LinearLayout>
         </androidx.core.widget.NestedScrollView>
     </LinearLayout>

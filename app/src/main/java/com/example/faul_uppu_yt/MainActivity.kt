@@ -149,6 +149,7 @@ class MainActivity : AppCompatActivity() {
         val heightEditText = findViewById<EditText>(R.id.et_height)
         val xEditText = findViewById<EditText>(R.id.et_x)
         val yEditText = findViewById<EditText>(R.id.et_y)
+        val subCountUrlEditText = findViewById<EditText>(R.id.et_sub_count_url)
 
         val prefs = getSharedPreferences("AppPrefs", MODE_PRIVATE)
         urlEditText.setText(prefs.getString("URL", ""))
@@ -156,6 +157,7 @@ class MainActivity : AppCompatActivity() {
         heightEditText.setText(prefs.getInt("HEIGHT", 300).toString())
         xEditText.setText(prefs.getInt("X_POS", 50).toString())
         yEditText.setText(prefs.getInt("Y_POS", 100).toString())
+        subCountUrlEditText.setText(prefs.getString("SUB_COUNT_URL", ""))
 
         findViewById<Button>(R.id.btn_launch_menu).setOnClickListener {
             if (!MenuService.isServiceRunning) {
@@ -168,9 +170,6 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btn_select_start).setOnClickListener {
             pickImageLauncher.launch(arrayOf("image/*", "image/gif"))
         }
-
-        // --- THIS IS THE FIX ---
-        // The listener for the "Stop Overlay" button has been removed.
 
         findViewById<Button>(R.id.btn_save_web_settings).setOnClickListener {
             val url = urlEditText.text.toString().trim()
@@ -191,6 +190,25 @@ class MainActivity : AppCompatActivity() {
             } else {
                 Toast.makeText(this, "Please enter a URL first.", Toast.LENGTH_SHORT).show()
             }
+        }
+
+        findViewById<Button>(R.id.btn_launch_sub_count).setOnClickListener {
+            val url = subCountUrlEditText.text.toString().trim()
+            if (url.isNotEmpty()) {
+                prefs.edit().putString("SUB_COUNT_URL", url).apply()
+                val intent = Intent(this, FloatingBrowserService::class.java).apply {
+                    putExtra(FloatingBrowserService.EXTRA_URL, url)
+                }
+                startService(intent)
+                Toast.makeText(this, "Live Subscriber Count Launched!", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "Please enter a URL for the subscriber count.", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        findViewById<Button>(R.id.btn_stop_sub_count).setOnClickListener {
+            stopService(Intent(this, FloatingBrowserService::class.java))
+            Toast.makeText(this, "Live Subscriber Count Stopped", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -292,3 +310,4 @@ class MainActivity : AppCompatActivity() {
         }
     }
 }
+
