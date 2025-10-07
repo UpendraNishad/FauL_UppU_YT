@@ -44,8 +44,10 @@ class MenuService : Service() {
     override fun onCreate() {
         super.onCreate()
         isServiceRunning = true
+
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+
         val themedContext = ContextThemeWrapper(this, R.style.Theme_FauL_UppU_YT)
         val inflater = LayoutInflater.from(themedContext)
 
@@ -55,11 +57,13 @@ class MenuService : Service() {
         setupWindowParameters()
 
         menuView.visibility = View.GONE
+
         windowManager.addView(menuView, menuParams)
         windowManager.addView(bubbleView, bubbleParams)
 
         setupBubbleTouchListener()
         setupMenuControls()
+
         startForegroundServiceNotification()
     }
 
@@ -80,17 +84,15 @@ class MenuService : Service() {
             y = lastBubbleY
         }
 
-        // --- THIS IS THE FIX ---
-        // Convert your desired dp values to pixels for the WindowManager
         val widthInDp = 240
-        val heightInDp = 280
+        val heightInDp = 320
         val metrics = resources.displayMetrics
         val widthInPixels = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, widthInDp.toFloat(), metrics).toInt()
         val heightInPixels = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, heightInDp.toFloat(), metrics).toInt()
 
         menuParams = WindowManager.LayoutParams(
-            widthInPixels,  // Use the fixed pixel width
-            heightInPixels, // Use the fixed pixel height
+            widthInPixels,
+            heightInPixels,
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY else WindowManager.LayoutParams.TYPE_PHONE,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
             PixelFormat.TRANSLUCENT
@@ -108,6 +110,10 @@ class MenuService : Service() {
             menuView.findViewById<SwitchCompat>(R.id.switch_image_overlay).isChecked = OverlayService.isServiceRunning
             menuView.findViewById<SwitchCompat>(R.id.switch_mic_mute).isChecked = audioManager.isMicrophoneMute
 
+            // Sync live subscriber count switch
+            menuView.findViewById<SwitchCompat>(R.id.switch_floating_browser).isChecked =
+                FloatingBrowserService.isServiceRunning && FloatingBrowserService.isBrowserVisible
+
             val volumeSeekBar = menuView.findViewById<SeekBar>(R.id.seekBar_volume)
             volumeSeekBar.progress = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
 
@@ -122,12 +128,28 @@ class MenuService : Service() {
 
     private fun setupMenuControls() {
         val imageOverlaySwitch = menuView.findViewById<SwitchCompat>(R.id.switch_image_overlay)
-        val webAlertSwitch = menuView.findViewById<SwitchCompat>(R.id.switch_web_alert)
+        val subscriberAlertSwitch = menuView.findViewById<SwitchCompat>(R.id.switch_web_alert)
+        val liveSubscriberCountSwitch = menuView.findViewById<SwitchCompat>(R.id.switch_floating_browser)
         val micMuteSwitch = menuView.findViewById<SwitchCompat>(R.id.switch_mic_mute)
         val closeBubbleButton = menuView.findViewById<Button>(R.id.btn_close_bubble)
         val brightnessSeekBar = menuView.findViewById<SeekBar>(R.id.seekBar_brightness)
         val volumeSeekBar = menuView.findViewById<SeekBar>(R.id.seekBar_volume)
 
+        // Live Subscriber Count Toggle Handler
+        liveSubscriberCountSwitch.setOnCheckedChangeListener { _, isChecked ->
+            if (FloatingBrowserService.isServiceRunning) {
+                // Send broadcast to toggle visibility
+                val intent = Intent("com.example.faul_uppu_yt.TOGGLE_BROWSER_VISIBILITY")
+                intent.putExtra("is_visible", isChecked)
+                sendBroadcast(intent)
+            } else {
+                // If service is not running, show message and reset switch
+                Toast.makeText(this, "Launch Live Subscriber Count first from main app", Toast.LENGTH_SHORT).show()
+                liveSubscriberCountSwitch.isChecked = false
+            }
+        }
+
+        // Image Overlay Switch
         imageOverlaySwitch.setOnCheckedChangeListener { _, isChecked ->
             if (isChecked) {
                 val prefs = getSharedPreferences("AppPrefs", MODE_PRIVATE)
@@ -146,15 +168,17 @@ class MenuService : Service() {
             }
         }
 
-        webAlertSwitch.setOnCheckedChangeListener { _, isChecked ->
+        // Subscriber Alert Switch
+        subscriberAlertSwitch.setOnCheckedChangeListener { _, isChecked ->
             if (isChecked) {
                 val prefs = getSharedPreferences("AppPrefs", MODE_PRIVATE)
                 val url = prefs.getString("URL", "")
                 if (url.isNullOrEmpty()) {
                     Toast.makeText(this, "Set a URL in the main app first.", Toast.LENGTH_SHORT).show()
-                    webAlertSwitch.isChecked = false
+                    subscriberAlertSwitch.isChecked = false
                     return@setOnCheckedChangeListener
                 }
+
                 val intent = Intent(this, AlertService::class.java).apply {
                     putExtra("url", url)
                     putExtra("width", prefs.getInt("WIDTH", 400))
@@ -172,6 +196,7 @@ class MenuService : Service() {
             stopSelf()
         }
 
+        // Mic Mute Switch
         micMuteSwitch.setOnCheckedChangeListener { _, isChecked ->
             try {
                 audioManager.isMicrophoneMute = isChecked
@@ -186,6 +211,7 @@ class MenuService : Service() {
             }
         }
 
+        // Brightness Control
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Settings.System.canWrite(this)) {
             brightnessSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
@@ -200,9 +226,9 @@ class MenuService : Service() {
             brightnessSeekBar.isEnabled = false
         }
 
+        // Volume Control
         val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
         volumeSeekBar.max = maxVolume
-
         volumeSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
@@ -230,6 +256,7 @@ class MenuService : Service() {
                     initialTouchY = event.rawY
                     return@setOnTouchListener true
                 }
+
                 MotionEvent.ACTION_UP -> {
                     val prefs = getSharedPreferences("AppPrefs", MODE_PRIVATE)
                     prefs.edit().apply {
@@ -237,12 +264,14 @@ class MenuService : Service() {
                         putInt("BUBBLE_Y", bubbleParams.y)
                         apply()
                     }
+
                     val isClick = kotlin.math.abs(event.rawX - initialTouchX) < 10 && kotlin.math.abs(event.rawY - initialTouchY) < 10
                     if (isClick) {
                         toggleMenuVisibility()
                     }
                     return@setOnTouchListener true
                 }
+
                 MotionEvent.ACTION_MOVE -> {
                     bubbleParams.x = initialX + (event.rawX - initialTouchX).toInt()
                     bubbleParams.y = initialY + (event.rawY - initialTouchY).toInt()
@@ -261,10 +290,12 @@ class MenuService : Service() {
                 NotificationChannel(channelId, "Floating Menu Service", NotificationManager.IMPORTANCE_LOW)
             )
         }
+
         val notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle("FauL UppU Controls Active")
             .setSmallIcon(R.mipmap.ic_launcher_round)
             .build()
+
         startForeground(103, notification)
     }
 

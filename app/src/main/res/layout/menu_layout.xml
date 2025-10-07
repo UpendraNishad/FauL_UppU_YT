@@ -20,91 +20,125 @@
             android:textColor="@android:color/white"
             android:textStyle="bold" />
 
+        <!-- Image/GIF Overlay Toggle -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center_vertical"
             android:orientation="horizontal">
+
             <TextView
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text="Image/GIF Overlay"
                 android:textColor="@android:color/white" />
+
             <androidx.appcompat.widget.SwitchCompat
                 android:id="@+id/switch_image_overlay"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content" />
         </LinearLayout>
 
+        <!-- Subscriber Alert Toggle -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center_vertical"
-            android:layout_marginTop="8dp"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:layout_marginTop="8dp">
+
             <TextView
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="Subscribe Alert"
+                android:text="Subscriber Alert"
                 android:textColor="@android:color/white" />
+
             <androidx.appcompat.widget.SwitchCompat
                 android:id="@+id/switch_web_alert"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content" />
         </LinearLayout>
 
+        <!-- Show/Hide Live Subscriber Count Toggle -->
         <LinearLayout
-            android:id="@+id/mic_switch_container"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center_vertical"
-            android:layout_marginTop="8dp"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:layout_marginTop="8dp">
+
             <TextView
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="Mute Microphone"
+                android:text="Show/Hide Live Subscriber Count"
                 android:textColor="@android:color/white" />
+
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/switch_floating_browser"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
+
+        <!-- Mic Mute Toggle -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:layout_marginTop="8dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Mic Mute"
+                android:textColor="@android:color/white" />
+
             <androidx.appcompat.widget.SwitchCompat
                 android:id="@+id/switch_mic_mute"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content" />
         </LinearLayout>
 
+        <!-- Brightness Control -->
         <TextView
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
             android:text="Brightness"
-            android:textColor="@android:color/white" />
+            android:textColor="@android:color/white"
+            android:layout_marginTop="16dp" />
+
         <SeekBar
             android:id="@+id/seekBar_brightness"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:max="255" />
+            android:max="255"
+            android:layout_marginTop="4dp" />
 
+        <!-- Volume Control -->
         <TextView
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
             android:text="Volume"
-            android:textColor="@android:color/white" />
+            android:textColor="@android:color/white"
+            android:layout_marginTop="16dp" />
+
         <SeekBar
             android:id="@+id/seekBar_volume"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp" />
 
+        <!-- Close Button -->
         <Button
             android:id="@+id/btn_close_bubble"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="Close Floating Bubble" />
+            android:text="Close"
+            android:layout_marginTop="16dp" />
 
     </LinearLayout>
 </ScrollView>
