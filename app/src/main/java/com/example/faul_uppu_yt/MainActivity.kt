@@ -13,16 +13,13 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.util.Log
 import android.view.View
-import android.widget.Button
-import android.widget.EditText
-import android.widget.LinearLayout
-import android.widget.ProgressBar
-import android.widget.TextView
-import android.widget.Toast
+import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
@@ -35,13 +32,14 @@ class MainActivity : AppCompatActivity() {
     private lateinit var mainContent: LinearLayout
     private lateinit var activationContent: LinearLayout
     private val db = Firebase.firestore
+    private val auth = FirebaseAuth.getInstance()
+    private var isAuthComplete = false
 
     private val pickImageLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         uri?.let {
             try {
                 contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION)
             } catch (_: Exception) { }
-
             val prefs = getSharedPreferences("AppPrefs", MODE_PRIVATE)
             prefs.edit().putString("LAST_IMAGE_URI", it.toString()).apply()
             Toast.makeText(this, "Image saved for quick toggle!", Toast.LENGTH_SHORT).show()
@@ -56,20 +54,36 @@ class MainActivity : AppCompatActivity() {
         mainContent = findViewById(R.id.main_content)
         activationContent = findViewById(R.id.activation_content)
 
-        checkLicense()
+        // Authenticate anonymously first
+        if (auth.currentUser == null) {
+            auth.signInAnonymously().addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    isAuthComplete = true
+                    Log.d("Auth", "Anonymous sign-in succeeded: UID = ${auth.currentUser?.uid}")
+                    checkLicense()
+                } else {
+                    val msg = task.exception?.localizedMessage ?: "Auth error"
+                    Toast.makeText(this, "Authentication failed: $msg", Toast.LENGTH_LONG).show()
+                    Log.e("Auth", "Sign-in failed: ${task.exception}")
+                    showActivationScreen(getUniqueDeviceId())
+                }
+            }
+        } else {
+            isAuthComplete = true
+            Log.d("Auth", "Already signed in: ${auth.currentUser?.uid}")
+            checkLicense()
+        }
     }
 
     private fun checkLicense() {
         showLoading()
         val deviceId = getUniqueDeviceId()
         val licenseDocRef = db.collection("licenses").document(deviceId)
-
         licenseDocRef.get()
             .addOnSuccessListener { document ->
                 if (document != null && document.exists()) {
                     val status = document.getString("status")
                     val expiryDate = document.getDate("expiryDate")
-
                     if (status == "ACTIVE") {
                         if (expiryDate == null || expiryDate.after(Date())) {
                             showMainContent()
@@ -78,15 +92,16 @@ class MainActivity : AppCompatActivity() {
                             showActivationScreen(deviceId)
                         }
                     } else {
-                        Toast.makeText(this, "Your license has been revoked.", Toast.LENGTH_LONG).show()
+                        Toast.makeText(this, "License revoked or invalid.", Toast.LENGTH_LONG).show()
                         showActivationScreen(deviceId)
                     }
                 } else {
                     showActivationScreen(deviceId)
                 }
             }
-            .addOnFailureListener {
-                Toast.makeText(this, "Error: Could not verify license. Check internet.", Toast.LENGTH_LONG).show()
+            .addOnFailureListener { e ->
+                Toast.makeText(this, "Error verifying license: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                Log.e("License", "Verification error", e)
                 showActivationScreen(deviceId)
             }
     }
@@ -94,13 +109,9 @@ class MainActivity : AppCompatActivity() {
     private fun activateLicense(key: String) {
         val deviceId = getUniqueDeviceId()
         showLoading()
-
         if (verifyAndDecodeKey(key, deviceId)) {
             val isPermanent = key.startsWith("PERM-")
-
-            val expiryDate: Date? = if (isPermanent) {
-                null
-            } else {
+            val expiryDate: Date? = if (isPermanent) null else {
                 val days = key.substringBefore("D-").toIntOrNull()
                 if (days != null) {
                     val calendar = Calendar.getInstance()
@@ -125,8 +136,9 @@ class MainActivity : AppCompatActivity() {
                     Toast.makeText(this, "License Activated Successfully!", Toast.LENGTH_SHORT).show()
                     showMainContent()
                 }
-                .addOnFailureListener {
-                    Toast.makeText(this, "Activation failed. Please try again.", Toast.LENGTH_SHORT).show()
+                .addOnFailureListener { e ->
+                    Toast.makeText(this, "Activation failed: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                    Log.e("Activation", "Failed", e)
                     showActivationScreen(deviceId)
                 }
         } else {
@@ -150,8 +162,8 @@ class MainActivity : AppCompatActivity() {
         val xEditText = findViewById<EditText>(R.id.et_x)
         val yEditText = findViewById<EditText>(R.id.et_y)
         val subCountUrlEditText = findViewById<EditText>(R.id.et_sub_count_url)
-
         val prefs = getSharedPreferences("AppPrefs", MODE_PRIVATE)
+
         urlEditText.setText(prefs.getString("URL", ""))
         widthEditText.setText(prefs.getInt("WIDTH", 400).toString())
         heightEditText.setText(prefs.getInt("HEIGHT", 300).toString())
@@ -179,7 +191,6 @@ class MainActivity : AppCompatActivity() {
                 val height = heightEditText.text.toString().toIntOrNull() ?: 300
                 val x = xEditText.text.toString().toIntOrNull() ?: 50
                 val y = yEditText.text.toString().toIntOrNull() ?: 100
-
                 editor.putString("URL", url)
                 editor.putInt("WIDTH", width)
                 editor.putInt("HEIGHT", height)
@@ -256,26 +267,20 @@ class MainActivity : AppCompatActivity() {
 
     @SuppressLint("HardwareIds")
     private fun getUniqueDeviceId(): String {
-        return Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+        return Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID) ?: ""
     }
 
     private fun verifyAndDecodeKey(key: String, deviceId: String): Boolean {
         val parts = key.split("-")
         if (parts.size != 2) return false
-
         val durationPrefix = parts[0]
         val receivedHash = parts[1]
-
-        val secretKey = "MyFauLAppIsAwesome2025!" // Example: Replace with your own key
-        val salt = "SomeRandomSaltValueForSecurity" // Example: Replace with your own salt
-
+        val salt = "SomeRandomSaltValueForSecurity"
         val dataToHash = "$deviceId-$durationPrefix-$salt"
-
         val expectedHash = MessageDigest.getInstance("SHA-256")
             .digest(dataToHash.toByteArray())
             .fold("") { str, it -> str + "%02x".format(it) }
             .substring(0, 12)
-
         return receivedHash == expectedHash
     }
 
@@ -286,7 +291,6 @@ class MainActivity : AppCompatActivity() {
         val density = resources.displayMetrics.density
         val desiredWidth = (desiredWidthDp * density).toInt()
         val desiredHeight = (desiredHeightDp * density).toInt()
-
         val bitmap = Bitmap.createBitmap(desiredWidth, desiredHeight, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         drawable?.setBounds(0, 0, canvas.width, canvas.height)
@@ -310,4 +314,3 @@ class MainActivity : AppCompatActivity() {
         }
     }
 }
-
