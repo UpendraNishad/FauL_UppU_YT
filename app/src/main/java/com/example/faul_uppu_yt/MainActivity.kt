@@ -24,6 +24,7 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import java.security.MessageDigest
+import com.google.firebase.firestore.SetOptions
 import java.util.*
 
 class MainActivity : AppCompatActivity() {
@@ -133,7 +134,7 @@ class MainActivity : AppCompatActivity() {
             )
 
             db.collection("licenses").document(deviceId)
-                .set(licenseData)
+                .set(licenseData, SetOptions.merge())
                 .addOnSuccessListener {
                     Toast.makeText(this, "License Activated Successfully!", Toast.LENGTH_SHORT).show()
                     showMainContent()
