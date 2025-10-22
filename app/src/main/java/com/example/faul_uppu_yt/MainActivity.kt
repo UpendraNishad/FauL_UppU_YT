@@ -61,6 +61,7 @@ class MainActivity : AppCompatActivity() {
                     isAuthComplete = true
                     Log.d("Auth", "Anonymous sign-in succeeded: UID = ${auth.currentUser?.uid}")
                     checkLicense()
+                    checkForAppUpdate()
                 } else {
                     val msg = task.exception?.localizedMessage ?: "Auth error"
                     Toast.makeText(this, "Authentication failed: $msg", Toast.LENGTH_LONG).show()
@@ -72,6 +73,7 @@ class MainActivity : AppCompatActivity() {
             isAuthComplete = true
             Log.d("Auth", "Already signed in: ${auth.currentUser?.uid}")
             checkLicense()
+            checkForAppUpdate()
         }
     }
 
@@ -165,8 +167,8 @@ class MainActivity : AppCompatActivity() {
         val prefs = getSharedPreferences("AppPrefs", MODE_PRIVATE)
 
         urlEditText.setText(prefs.getString("URL", ""))
-        widthEditText.setText(prefs.getInt("WIDTH", 400).toString())
-        heightEditText.setText(prefs.getInt("HEIGHT", 300).toString())
+        widthEditText.setText(prefs.getInt("WIDTH", 1080).toString())
+        heightEditText.setText(prefs.getInt("HEIGHT", 1080).toString())
         xEditText.setText(prefs.getInt("X_POS", 50).toString())
         yEditText.setText(prefs.getInt("Y_POS", 100).toString())
         subCountUrlEditText.setText(prefs.getString("SUB_COUNT_URL", ""))
@@ -187,8 +189,8 @@ class MainActivity : AppCompatActivity() {
             val url = urlEditText.text.toString().trim()
             if (url.isNotEmpty()) {
                 val editor = prefs.edit()
-                val width = widthEditText.text.toString().toIntOrNull() ?: 400
-                val height = heightEditText.text.toString().toIntOrNull() ?: 300
+                val width = widthEditText.text.toString().toIntOrNull() ?: 1080
+                val height = heightEditText.text.toString().toIntOrNull() ?: 1080
                 val x = xEditText.text.toString().toIntOrNull() ?: 50
                 val y = yEditText.text.toString().toIntOrNull() ?: 100
                 editor.putString("URL", url)
@@ -312,5 +314,52 @@ class MainActivity : AppCompatActivity() {
             }
             startActivity(intent)
         }
+    }
+
+    // --- LIVE FIRESTORE-DRIVEN UPDATE CHECK ---
+    private fun checkForAppUpdate() {
+        val currentVersion = BuildConfig.VERSION_NAME
+        val configRef = Firebase.firestore.collection("config").document("app_update")
+        Log.d("UpdateCheck", "Starting Firestore read for app update.")
+
+        configRef.get()
+            .addOnSuccessListener { snapshot ->
+                Log.d("UpdateCheck", "Read successful. Exists=${snapshot.exists()} Data=${snapshot.data}")
+                if (snapshot.exists()) {
+                    val latestVersion = snapshot.getString("latest_version") ?: currentVersion
+                    val updateRequired = snapshot.getBoolean("update_required") ?: false
+                    Log.d("UpdateCheck", "latestVersion=$latestVersion updateRequired=$updateRequired")
+
+                    val message = snapshot.getString("message") ?: "Update required."
+                    val updateUrl = snapshot.getString("update_url") ?: ""
+
+                    if (updateRequired && latestVersion != currentVersion) {
+                        Log.d("UpdateCheck", "Update available! Showing dialog...")
+                        showMandatoryUpdateDialog(message, updateUrl)
+                    } else {
+                        Log.d("UpdateCheck", "App is up to date. Current=$currentVersion")
+                    }
+                } else {
+                    Log.w("UpdateCheck", "No app_update document found.")
+                }
+            }
+            .addOnFailureListener { e ->
+                Log.e("UpdateCheck", "Firestore read failed: ${e.localizedMessage}")
+            }
+    }
+    private fun showMandatoryUpdateDialog(message: String, updateUrl: String) {
+        val dialog = android.app.AlertDialog.Builder(this)
+            .setTitle("Update Required")
+            .setMessage(message)
+            .setCancelable(false)
+            .setPositiveButton("Update") { _, _ ->
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(updateUrl)))
+                } catch (_: Exception) { }
+                showMandatoryUpdateDialog(message, updateUrl)
+            }
+            .create()
+        dialog.setCanceledOnTouchOutside(false)
+        dialog.show()
     }
 }
