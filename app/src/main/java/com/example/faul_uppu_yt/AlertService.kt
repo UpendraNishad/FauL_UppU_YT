@@ -61,15 +61,18 @@ class AlertService : Service() {
             visibility = View.VISIBLE
         }
 
+        @SuppressLint("UnspecifiedRegisterReceiverFlag")
         if (!isReceiverRegistered) {
             val filter = IntentFilter("com.example.faul_uppu_yt.SHOW_ALERT")
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                registerReceiver(alertTriggerReceiver, filter, RECEIVER_NOT_EXPORTED)
+                registerReceiver(alertTriggerReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
             } else {
+                @Suppress("DEPRECATION")
                 registerReceiver(alertTriggerReceiver, filter)
             }
             isReceiverRegistered = true
         }
+
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -106,7 +109,13 @@ class AlertService : Service() {
             .setContentTitle("Alert Service Active")
             .setSmallIcon(R.mipmap.ic_launcher)
             .build()
-        startForeground(102, notification)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) { // API 34
+            startForeground(102, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        } else {
+            startForeground(102, notification)
+        }
+
 
         return START_STICKY
     }

@@ -2,14 +2,11 @@ package com.example.faul_uppu_yt
 
 import android.annotation.SuppressLint
 import android.app.Service
-import android.content.BroadcastReceiver
-import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
-import android.content.SharedPreferences
+import android.content.*
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
+import android.os.Handler
 import android.view.*
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -42,6 +39,7 @@ class FloatingBrowserService : Service() {
                 val shouldBeVisible = intent.getBooleanExtra("is_visible", true)
                 browserView.visibility = if (shouldBeVisible) View.VISIBLE else View.GONE
                 isBrowserVisible = shouldBeVisible
+                sharedPreferences.edit().putBoolean(PREF_BROWSER_VISIBLE, shouldBeVisible).apply()
             }
         }
     }
@@ -50,6 +48,7 @@ class FloatingBrowserService : Service() {
         var isServiceRunning = false
         var isBrowserVisible = true
         const val EXTRA_URL = "extra_url"
+        const val PREF_BROWSER_VISIBLE = "PREF_BROWSER_VISIBLE"
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -58,15 +57,14 @@ class FloatingBrowserService : Service() {
     override fun onCreate() {
         super.onCreate()
         isServiceRunning = true
-        isBrowserVisible = true
-
         sharedPreferences = getSharedPreferences("AppPrefs", Context.MODE_PRIVATE)
+        isBrowserVisible = sharedPreferences.getBoolean(PREF_BROWSER_VISIBLE, true)
 
         val themedContext = ContextThemeWrapper(this, R.style.Theme_FauL_UppU_YT)
-        browserView = LayoutInflater.from(themedContext).inflate(R.layout.floating_browser_layout, null)
+        browserView = LayoutInflater.from(themedContext)
+            .inflate(R.layout.floating_browser_layout, null)
 
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-
         webView = browserView.findViewById(R.id.floating_webview)
         dragHandle = browserView.findViewById(R.id.drag_handle)
 
@@ -76,12 +74,13 @@ class FloatingBrowserService : Service() {
             WindowManager.LayoutParams.TYPE_PHONE
         }
 
-        // CORRECT APPROACH: Start with FLAG_NOT_FOCUSABLE, remove it only when user taps input field
         params = WindowManager.LayoutParams(
             sharedPreferences.getInt("BROWSER_WIDTH", 1500),
             sharedPreferences.getInt("BROWSER_HEIGHT", 1000),
             layoutType,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         )
 
@@ -89,30 +88,35 @@ class FloatingBrowserService : Service() {
         params.x = sharedPreferences.getInt("BROWSER_X", 100)
         params.y = sharedPreferences.getInt("BROWSER_Y", 100)
 
-        windowManager.addView(browserView, params)
+        if (!browserView.isAttachedToWindow) {
+            windowManager.addView(browserView, params)
+        }
 
         setupWebView()
-        setupTouchListeners()
 
-        scaleGestureDetector = ScaleGestureDetector(themedContext, ScaleListener())
-
-        val touchFilter = IntentFilter("com.example.faul_uppu_yt.TOGGLE_BROWSER_TOUCH")
-        val visibilityFilter = IntentFilter("com.example.faul_uppu_yt.TOGGLE_BROWSER_VISIBILITY")
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(touchToggleReceiver, touchFilter, RECEIVER_NOT_EXPORTED)
-            registerReceiver(visibilityToggleReceiver, visibilityFilter, RECEIVER_NOT_EXPORTED)
-        } else {
-            registerReceiver(touchToggleReceiver, touchFilter)
-            registerReceiver(visibilityToggleReceiver, visibilityFilter)
+        // WebView keyboard mode: Hold to toggle ON/OFF, robust user-friendly
+        webView.setOnLongClickListener {
+            if ((params.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE) != 0) {
+                params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
+                windowManager.updateViewLayout(browserView, params)
+                webView.requestFocus()
+                android.widget.Toast.makeText(this, "Keyboard mode ON - long press again to turn OFF", android.widget.Toast.LENGTH_SHORT).show()
+            } else {
+                params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                windowManager.updateViewLayout(browserView, params)
+                android.widget.Toast.makeText(this, "Keyboard mode OFF", android.widget.Toast.LENGTH_SHORT).show()
+            }
+            true
         }
+
+        setupTouchListeners()
+        scaleGestureDetector = ScaleGestureDetector(themedContext, ScaleListener())
+        registerToggleReceivers()
+        browserView.visibility = if (isBrowserVisible) View.VISIBLE else View.GONE
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        intent?.getStringExtra(EXTRA_URL)?.let {
-            webView.loadUrl(it)
-        }
-
+        intent?.getStringExtra(EXTRA_URL)?.let { webView.loadUrl(it) }
         return START_NOT_STICKY
     }
 
@@ -126,7 +130,6 @@ class FloatingBrowserService : Service() {
         webSettings.displayZoomControls = false
         webSettings.loadWithOverviewMode = true
         webSettings.useWideViewPort = true
-
         webView.isFocusable = true
         webView.isFocusableInTouchMode = true
     }
@@ -139,12 +142,11 @@ class FloatingBrowserService : Service() {
         var initialTouchY = 0f
         var isDragging = false
 
-        // SOLUTION: Double-tap to enable keyboard mode
-        var lastTouchTime = 0L
+        var longPressHandler: Handler? = null
+        var longPressRunnable: Runnable? = null
 
         browserView.setOnTouchListener { _, event ->
             scaleGestureDetector.onTouchEvent(event)
-
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
                     if (event.y <= dragHandle.height) {
@@ -154,27 +156,8 @@ class FloatingBrowserService : Service() {
                         initialTouchX = event.rawX
                         initialTouchY = event.rawY
                         return@setOnTouchListener true
-                    } else {
-                        // Double-tap detection for WebView area
-                        val currentTime = System.currentTimeMillis()
-                        if (currentTime - lastTouchTime < 300) {
-                            // Double-tap detected - enable keyboard mode
-                            if ((params.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE) != 0) {
-                                params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
-                                windowManager.updateViewLayout(browserView, params)
-                                webView.requestFocus()
-                            }
-                        } else {
-                            // Single tap - just let WebView handle it normally
-                            if ((params.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE) == 0) {
-                                webView.requestFocus()
-                            }
-                        }
-                        lastTouchTime = currentTime
-                        return@setOnTouchListener false
                     }
                 }
-
                 MotionEvent.ACTION_MOVE -> {
                     if (isDragging && !scaleGestureDetector.isInProgress) {
                         params.x = initialX + (event.rawX - initialTouchX).toInt()
@@ -183,103 +166,84 @@ class FloatingBrowserService : Service() {
                         return@setOnTouchListener true
                     }
                 }
-
-                MotionEvent.ACTION_UP -> {
-                    if(isDragging) {
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    if (isDragging) {
                         saveBrowserState()
                         isDragging = false
                         return@setOnTouchListener true
                     }
                 }
             }
-
-            return@setOnTouchListener false
-        }
-
-        // Add a button to toggle keyboard mode
-        webView.setOnLongClickListener {
-            if ((params.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE) != 0) {
-                // Enable keyboard mode
-                params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
-                windowManager.updateViewLayout(browserView, params)
-                webView.requestFocus()
-                android.widget.Toast.makeText(this, "Keyboard mode ON - Tap outside to disable", android.widget.Toast.LENGTH_SHORT).show()
-            } else {
-                // Disable keyboard mode
-                params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                windowManager.updateViewLayout(browserView, params)
-                android.widget.Toast.makeText(this, "Keyboard mode OFF", android.widget.Toast.LENGTH_SHORT).show()
-            }
-            true
-        }
-
-        // Detect touches outside the browser to disable keyboard mode
-        browserView.setOnSystemUiVisibilityChangeListener {
-            // This gets called when keyboard appears/disappears
-            if ((params.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE) == 0) {
-                // If keyboard mode is on and keyboard disappears, disable keyboard mode
-                browserView.postDelayed({
-                    if ((params.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE) == 0) {
-                        params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                        windowManager.updateViewLayout(browserView, params)
-                    }
-                }, 1000)
-            }
+            false
         }
     }
 
     private fun toggleTouch(isLocked: Boolean) {
-        if (isLocked) {
-            params.flags = WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+        params.flags = if (isLocked) {
+            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
         } else {
-            params.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
         }
-
         windowManager.updateViewLayout(browserView, params)
     }
 
     private fun saveBrowserState() {
-        val editor = sharedPreferences.edit()
-        editor.putInt("BROWSER_X", params.x)
-        editor.putInt("BROWSER_Y", params.y)
-        editor.putInt("BROWSER_WIDTH", params.width)
-        editor.putInt("BROWSER_HEIGHT", params.height)
-        editor.apply()
+        sharedPreferences.edit().apply {
+            putInt("BROWSER_X", params.x)
+            putInt("BROWSER_Y", params.y)
+            putInt("BROWSER_WIDTH", params.width)
+            putInt("BROWSER_HEIGHT", params.height)
+            apply()
+        }
     }
 
     private inner class ScaleListener : ScaleGestureDetector.SimpleOnScaleGestureListener() {
         private var aspectRatio: Float = 0f
-
-        override fun onScaleBegin(detector: ScaleGestureDetector): Boolean {
+        override fun onScaleBegin(detector: ScaleGestureDetector) : Boolean {
             aspectRatio = params.width.toFloat() / params.height.toFloat()
             return true
         }
-
-        override fun onScale(detector: ScaleGestureDetector): Boolean {
-            val newWidth = max(300, (params.width * detector.scaleFactor).roundToInt())
+        override fun onScale(detector: ScaleGestureDetector) : Boolean {
+            val newWidth = max(50, (params.width * detector.scaleFactor).roundToInt())
             val newHeight = (newWidth / aspectRatio).roundToInt()
-
             params.width = newWidth
             params.height = newHeight
-
             windowManager.updateViewLayout(browserView, params)
             return true
         }
-
         override fun onScaleEnd(detector: ScaleGestureDetector) {
             super.onScaleEnd(detector)
             saveBrowserState()
         }
     }
 
+    @SuppressLint("UnspecifiedRegisterReceiverFlag")
+    private fun registerToggleReceivers() {
+        val touchFilter = IntentFilter("com.example.faul_uppu_yt.TOGGLE_BROWSER_TOUCH")
+        val visibilityFilter = IntentFilter("com.example.faul_uppu_yt.TOGGLE_BROWSER_VISIBILITY")
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(touchToggleReceiver, touchFilter, Context.RECEIVER_NOT_EXPORTED)
+            registerReceiver(visibilityToggleReceiver, visibilityFilter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(touchToggleReceiver, touchFilter)
+            @Suppress("DEPRECATION")
+            registerReceiver(visibilityToggleReceiver, visibilityFilter)
+        }
+    }
+
+
     override fun onDestroy() {
         super.onDestroy()
         isServiceRunning = false
-        isBrowserVisible = true
-
         unregisterReceiver(touchToggleReceiver)
         unregisterReceiver(visibilityToggleReceiver)
-
         if (::browserView.isInitialized && browserView.isAttachedToWindow) {
             windowManager.removeView(browserView)
         }

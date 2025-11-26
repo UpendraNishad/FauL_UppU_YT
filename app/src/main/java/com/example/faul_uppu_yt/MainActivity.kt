@@ -176,7 +176,15 @@ class MainActivity : AppCompatActivity() {
 
         findViewById<Button>(R.id.btn_launch_menu).setOnClickListener {
             if (!MenuService.isServiceRunning) {
-                startService(Intent(this, MenuService::class.java))
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                        requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), 123)
+                    } else {
+                        startService(Intent(this, MenuService::class.java))
+                    }
+                } else {
+                    startService(Intent(this, MenuService::class.java))
+                }
             } else {
                 Toast.makeText(this, "Menu is already running", Toast.LENGTH_SHORT).show()
             }
@@ -206,10 +214,12 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // ==== PATCHED: Persist the browser visibility flag ====
         findViewById<Button>(R.id.btn_launch_sub_count).setOnClickListener {
             val url = subCountUrlEditText.text.toString().trim()
             if (url.isNotEmpty()) {
                 prefs.edit().putString("SUB_COUNT_URL", url).apply()
+                prefs.edit().putBoolean(FloatingBrowserService.PREF_BROWSER_VISIBLE, true).apply()
                 val intent = Intent(this, FloatingBrowserService::class.java).apply {
                     putExtra(FloatingBrowserService.EXTRA_URL, url)
                 }
@@ -222,7 +232,23 @@ class MainActivity : AppCompatActivity() {
 
         findViewById<Button>(R.id.btn_stop_sub_count).setOnClickListener {
             stopService(Intent(this, FloatingBrowserService::class.java))
+            prefs.edit().putBoolean(FloatingBrowserService.PREF_BROWSER_VISIBLE, false).apply()
             Toast.makeText(this, "Live Subscriber Count Stopped", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 123) {
+            if (grantResults.isNotEmpty() && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                startService(Intent(this, MenuService::class.java))
+            } else {
+                Toast.makeText(
+                    this,
+                    "Microphone permission required to start the menu service.",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
         }
     }
 

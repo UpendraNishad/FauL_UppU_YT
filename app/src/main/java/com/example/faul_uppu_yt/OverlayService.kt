@@ -1,16 +1,16 @@
 package com.example.faul_uppu_yt
 
 import android.annotation.SuppressLint
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.Service
+import android.app.*
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.graphics.PixelFormat
 import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Build
 import android.os.IBinder
+import android.provider.Settings
 import android.view.*
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -45,17 +45,23 @@ class OverlayService : Service() {
     override fun onCreate() {
         super.onCreate()
         isServiceRunning = true
+
+        // Ensure overlay permission granted
+        if (!Settings.canDrawOverlays(this)) {
+            stopSelf()
+            return
+        }
+
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         val inflater = getSystemService(Context.LAYOUT_INFLATER_SERVICE) as LayoutInflater
         overlayView = inflater.inflate(R.layout.overlay_layout, null) as FrameLayout
         imageView = overlayView.findViewById(R.id.overlayImage)
 
         setupWindowParameters()
-
         windowManager.addView(overlayView, params)
+
         scaleGestureDetector = ScaleGestureDetector(this, ScaleListener())
         setupTouchListener()
-
         startForegroundServiceNotification()
     }
 
@@ -71,7 +77,6 @@ class OverlayService : Service() {
         val prefs = getSharedPreferences("AppPrefs", MODE_PRIVATE)
         val lastX = prefs.getInt("OVERLAY_X", 0)
         val lastY = prefs.getInt("OVERLAY_Y", 100)
-        // Start with WRAP_CONTENT to let the first image determine the size.
         val lastWidth = prefs.getInt("OVERLAY_WIDTH", WindowManager.LayoutParams.WRAP_CONTENT)
         val lastHeight = prefs.getInt("OVERLAY_HEIGHT", WindowManager.LayoutParams.WRAP_CONTENT)
 
@@ -86,8 +91,8 @@ class OverlayService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            this.x = lastX
-            this.y = lastY
+            x = lastX
+            y = lastY
         }
 
         if (lastWidth != WindowManager.LayoutParams.WRAP_CONTENT) {
@@ -102,20 +107,19 @@ class OverlayService : Service() {
         Glide.with(this)
             .load(uri)
             .listener(object : RequestListener<Drawable> {
-                override fun onLoadFailed(e: GlideException?, model: Any?, target: Target<Drawable>, isFirstResource: Boolean): Boolean { return false }
+                override fun onLoadFailed(
+                    e: GlideException?, model: Any?, target: Target<Drawable>, isFirstResource: Boolean
+                ): Boolean = false
 
-                override fun onResourceReady(resource: Drawable, model: Any, target: Target<Drawable>?, dataSource: DataSource, isFirstResource: Boolean): Boolean {
-                    // --- THIS IS THE FIX ---
-                    // This logic now runs EVERY time a new image is loaded, not just the first time.
-                    // It resets the window to a default width while maintaining the new image's aspect ratio.
+                override fun onResourceReady(
+                    resource: Drawable, model: Any, target: Target<Drawable>, dataSource: DataSource, isFirstResource: Boolean
+                ): Boolean {
                     val aspectRatio = resource.intrinsicWidth.toFloat() / resource.intrinsicHeight.toFloat()
-                    val newWidth = (resources.displayMetrics.density * 200).toInt() // Reset to a consistent 200dp width
+                    val newWidth = (resources.displayMetrics.density * 200).toInt()
                     val newHeight = (newWidth / aspectRatio).toInt()
-
                     updateOverlaySize(newWidth, newHeight)
-                    saveOverlayState() // Save the new size immediately
-
-                    return false // Let Glide continue its work
+                    saveOverlayState()
+                    return false
                 }
             })
             .into(imageView)
@@ -187,16 +191,40 @@ class OverlayService : Service() {
 
     private fun startForegroundServiceNotification() {
         val channelId = "overlay_service_channel"
+        val channelName = "Overlay Service"
+
+        val notificationManager =
+            getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(channelId, "Floating Overlay Service", NotificationManager.IMPORTANCE_LOW)
-            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            manager.createNotificationChannel(channel)
+            if (notificationManager.getNotificationChannel(channelId) == null) {
+                val channel = NotificationChannel(
+                    channelId,
+                    channelName,
+                    NotificationManager.IMPORTANCE_LOW
+                )
+                notificationManager.createNotificationChannel(channel)
+            }
         }
+
+        // Build the notification before using it!
         val notification = NotificationCompat.Builder(this, channelId)
-            .setContentTitle("Floating Overlay Active")
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle("Faul Uppu YT")
+            .setContentText("Overlay Service is running")
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setOngoing(true)
             .build()
-        startForeground(101, notification)
+
+        // Android 14+ requires explicit foreground service type
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(
+                101,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            )
+        } else {
+            startForeground(101, notification)
+        }
     }
 
     override fun onDestroy() {

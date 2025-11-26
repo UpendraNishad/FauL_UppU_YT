@@ -2,20 +2,19 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.kapt")
-    // ADD THIS LINE
     id("com.google.gms.google-services")
 }
 
 android {
     namespace = "com.example.faul_uppu_yt"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.example.faul_uppu_yt"
         minSdk = 26
         targetSdk = 34
         versionCode = 1
-        versionName = "version 31"
+        versionName = "version 45"
     }
 
     buildTypes {
@@ -42,8 +41,12 @@ android {
 }
 
 dependencies {
+    // Import the Firebase BoM (Bill of Materials) - this helps manage library versions
+    // You only need to declare this once.
     implementation(platform("com.google.firebase:firebase-bom:32.3.1"))
+
     implementation("com.google.firebase:firebase-auth-ktx")
+    implementation("com.google.firebase:firebase-firestore-ktx")
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.activity:activity-ktx:1.9.2")
@@ -51,10 +54,4 @@ dependencies {
     implementation("com.github.bumptech.glide:glide:4.16.0")
     kapt("com.github.bumptech.glide:compiler:4.16.0")
     implementation("com.google.android.material:material:1.12.0")
-
-    // ADD THESE LINES FOR FIREBASE
-    // Import the Firebase BoM (Bill of Materials) - this helps manage library versions
-    implementation(platform("com.google.firebase:firebase-bom:32.3.1"))
-    // Add the dependency for the Firestore database
-    implementation("com.google.firebase:firebase-firestore-ktx")
 }
