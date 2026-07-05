@@ -65,6 +65,14 @@
                             android:layout_marginTop="8dp"
                             android:text="Select Image/GIF Overlay"/>
 
+                        <androidx.appcompat.widget.SwitchCompat
+                            android:id="@+id/switch_bubble_visible"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="16dp"
+                            android:checked="true"
+                            android:text="Show Floating Bubble"/>
+
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 

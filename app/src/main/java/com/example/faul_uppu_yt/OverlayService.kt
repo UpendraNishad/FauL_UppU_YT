@@ -38,6 +38,7 @@ class OverlayService : Service() {
     private var initialY: Int = 0
     private var initialTouchX: Float = 0f
     private var initialTouchY: Float = 0f
+    private var hasSavedSize: Boolean = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -87,7 +88,9 @@ class OverlayService : Service() {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             else
                 WindowManager.LayoutParams.TYPE_PHONE,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
@@ -96,6 +99,7 @@ class OverlayService : Service() {
         }
 
         if (lastWidth != WindowManager.LayoutParams.WRAP_CONTENT) {
+            hasSavedSize = true
             val imageLayout = imageView.layoutParams
             imageLayout.width = lastWidth
             imageLayout.height = lastHeight
@@ -114,11 +118,17 @@ class OverlayService : Service() {
                 override fun onResourceReady(
                     resource: Drawable, model: Any, target: Target<Drawable>, dataSource: DataSource, isFirstResource: Boolean
                 ): Boolean {
-                    val aspectRatio = resource.intrinsicWidth.toFloat() / resource.intrinsicHeight.toFloat()
-                    val newWidth = (resources.displayMetrics.density * 200).toInt()
-                    val newHeight = (newWidth / aspectRatio).toInt()
-                    updateOverlaySize(newWidth, newHeight)
-                    saveOverlayState()
+                    // Only apply the default size the first time an image/gif is loaded.
+                    // If a custom size was already saved (user resized it before), keep it
+                    // instead of resetting back to the default on every toggle on/off.
+                    if (!hasSavedSize) {
+                        val aspectRatio = resource.intrinsicWidth.toFloat() / resource.intrinsicHeight.toFloat()
+                        val newWidth = (resources.displayMetrics.density * 200).toInt()
+                        val newHeight = (newWidth / aspectRatio).toInt()
+                        updateOverlaySize(newWidth, newHeight)
+                        saveOverlayState()
+                        hasSavedSize = true
+                    }
                     return false
                 }
             })

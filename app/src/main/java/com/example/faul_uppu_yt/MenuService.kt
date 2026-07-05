@@ -4,8 +4,10 @@ import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.PixelFormat
 import android.media.AudioManager
 import android.os.Build
@@ -36,8 +38,18 @@ class MenuService : Service() {
 
     private var overlaysLikelyCovered = false
 
+    private val bubbleVisibilityReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == "com.example.faul_uppu_yt.TOGGLE_BUBBLE_VISIBILITY") {
+                val shouldBeVisible = intent.getBooleanExtra("is_visible", true)
+                setBubbleVisibility(shouldBeVisible)
+            }
+        }
+    }
+
     companion object {
         var isServiceRunning = false
+        const val PREF_BUBBLE_VISIBLE = "PREF_BUBBLE_VISIBLE"
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -63,7 +75,32 @@ class MenuService : Service() {
 
         setupBubbleTouchListener()
         setupMenuControls()
+        registerBubbleVisibilityReceiver()
         startForegroundServiceNotification()
+
+        // Restore last saved bubble visibility state
+        val prefs = getSharedPreferences("AppPrefs", MODE_PRIVATE)
+        setBubbleVisibility(prefs.getBoolean(PREF_BUBBLE_VISIBLE, true))
+    }
+
+    @SuppressLint("UnspecifiedRegisterReceiverFlag")
+    private fun registerBubbleVisibilityReceiver() {
+        val filter = IntentFilter("com.example.faul_uppu_yt.TOGGLE_BUBBLE_VISIBILITY")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(bubbleVisibilityReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(bubbleVisibilityReceiver, filter)
+        }
+    }
+
+    private fun setBubbleVisibility(visible: Boolean) {
+        bubbleView.visibility = if (visible) View.VISIBLE else View.GONE
+        // No bubble means no way to tap open the menu, so hide it too.
+        if (!visible) menuView.visibility = View.GONE
+        getSharedPreferences("AppPrefs", MODE_PRIVATE).edit()
+            .putBoolean(PREF_BUBBLE_VISIBLE, visible)
+            .apply()
     }
 
     // <-- THIS restores menu z-order above overlays after being hidden and re-shown.
@@ -303,6 +340,9 @@ class MenuService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         isServiceRunning = false
+        try {
+            unregisterReceiver(bubbleVisibilityReceiver)
+        } catch (_: Exception) {}
         try {
             if (audioManager.isMicrophoneMute) audioManager.isMicrophoneMute = false
         } catch (_: SecurityException) {}

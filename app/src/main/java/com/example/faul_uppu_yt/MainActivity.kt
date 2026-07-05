@@ -18,6 +18,7 @@ import android.view.View
 import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.SwitchCompat
 import androidx.core.content.ContextCompat
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
@@ -192,6 +193,24 @@ class MainActivity : AppCompatActivity() {
 
         findViewById<Button>(R.id.btn_select_start).setOnClickListener {
             pickImageLauncher.launch(arrayOf("image/*", "image/gif"))
+        }
+
+        val bubbleVisibleSwitch = findViewById<SwitchCompat>(R.id.switch_bubble_visible)
+        bubbleVisibleSwitch.isChecked = prefs.getBoolean(MenuService.PREF_BUBBLE_VISIBLE, true)
+        bubbleVisibleSwitch.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit().putBoolean(MenuService.PREF_BUBBLE_VISIBLE, isChecked).apply()
+            if (MenuService.isServiceRunning) {
+                val visibilityIntent = Intent("com.example.faul_uppu_yt.TOGGLE_BUBBLE_VISIBILITY").apply {
+                    putExtra("is_visible", isChecked)
+                    setPackage(packageName)
+                }
+                sendBroadcast(visibilityIntent)
+            }
+            Toast.makeText(
+                this,
+                if (isChecked) "Floating bubble shown" else "Floating bubble hidden",
+                Toast.LENGTH_SHORT
+            ).show()
         }
 
         findViewById<Button>(R.id.btn_save_web_settings).setOnClickListener {
