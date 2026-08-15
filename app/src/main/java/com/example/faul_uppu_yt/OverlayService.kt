@@ -61,6 +61,11 @@ class OverlayService : Service() {
         setupWindowParameters()
         windowManager.addView(overlayView, params)
 
+        // Self-heal: if a position saved from a previous session (or a previous
+        // buggy build) ends up off-screen, snap it back into view once the
+        // overlay has actually been laid out and we know its real size.
+        overlayView.post { clampToScreen() }
+
         scaleGestureDetector = ScaleGestureDetector(this, ScaleListener())
         setupTouchListener()
         startForegroundServiceNotification()
@@ -96,7 +101,25 @@ class OverlayService : Service() {
             gravity = Gravity.TOP or Gravity.START
             x = lastX
             y = lastY
+
+            // Without this, the system clamps the window's vertical position to
+            // avoid the status bar / cutout / nav bar — even with
+            // FLAG_LAYOUT_NO_LIMITS — which is why dragging could reach the true
+            // left/right edges but stopped short of the true top/bottom edges.
+            // There's no equivalent horizontal system bar on a phone, so X was
+            // never affected the same way.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+            }
         }
+
+        @Suppress("DEPRECATION")
+        overlayView.systemUiVisibility = (
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+                        View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+                        View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                )
 
         if (lastWidth != WindowManager.LayoutParams.WRAP_CONTENT) {
             hasSavedSize = true
@@ -135,6 +158,78 @@ class OverlayService : Service() {
             .into(imageView)
     }
 
+    /**
+     * The window's x/y for a TYPE_APPLICATION_OVERLAY with FLAG_LAYOUT_NO_LIMITS is
+     * expressed in *real* raw display pixels (the full physical screen, including
+     * the area under the status bar / nav bar / cutout) — not the possibly-smaller
+     * "current app window" size that resources.displayMetrics can report. Using the
+     * wrong size here is what made dragging feel like it hit invisible walls before
+     * actually reaching the screen edges.
+     */
+    private fun getRealScreenSize(): Pair<Int, Int> {
+        val metrics = android.util.DisplayMetrics()
+        @Suppress("DEPRECATION")
+        windowManager.defaultDisplay.getRealMetrics(metrics)
+        return metrics.widthPixels to metrics.heightPixels
+    }
+
+    /**
+     * Minimum strip of the overlay (in px) that must always stay on-screen so it
+     * can be grabbed and dragged back. Roughly a comfortable touch-target size.
+     */
+    private fun minVisiblePx(): Int = (48 * resources.displayMetrics.density).toInt()
+
+    /**
+     * Height of the on-screen navigation bar (back/home/recents), in px. The nav
+     * bar is drawn by a system layer that intercepts touches for its own buttons —
+     * so if the overlay's touchable strip sits inside that zone, taps hit the nav
+     * buttons instead of the overlay, making the image effectively untouchable.
+     * Returns 0 on gesture-nav devices where there's no dedicated button bar.
+     */
+    private fun navigationBarHeightPx(): Int {
+        val resourceId = resources.getIdentifier("navigation_bar_height", "dimen", "android")
+        return if (resourceId > 0) resources.getDimensionPixelSize(resourceId) else 0
+    }
+
+    /**
+     * Requiring the WHOLE image to stay on-screen (as a first pass did) means the
+     * usable drag range shrinks as the image grows — a big image can't get its
+     * corner near an edge and still fit, which feels like invisible walls. Instead,
+     * only a small fixed strip of the view is required to stay visible; the rest is
+     * free to hang off any edge. This keeps dragging free across the whole screen
+     * at any image size, while still guaranteeing it can never be dragged fully off
+     * and lost. The bottom bound is additionally pulled up above the navigation
+     * bar so the visible strip never lands in the nav buttons' dead zone.
+     */
+    private fun coerceToScreen(x: Int, y: Int): Pair<Int, Int> {
+        val (screenWidth, screenHeight) = getRealScreenSize()
+        val viewWidth = overlayView.width
+        val viewHeight = overlayView.height
+        val navBarHeight = navigationBarHeightPx()
+
+        val minVisibleX = minOf(minVisiblePx(), viewWidth)
+        val minVisibleY = minOf(minVisiblePx(), viewHeight)
+
+        val minX = -(viewWidth - minVisibleX)
+        val maxX = screenWidth - minVisibleX
+        val minY = -(viewHeight - minVisibleY)
+        val maxY = (screenHeight - minVisibleY - navBarHeight).coerceAtLeast(minY)
+
+        return x.coerceIn(minX, maxX) to y.coerceIn(minY, maxY)
+    }
+
+    private fun clampToScreen() {
+        if (overlayView.width == 0 || overlayView.height == 0) return
+
+        val (clampedX, clampedY) = coerceToScreen(params.x, params.y)
+        if (clampedX != params.x || clampedY != params.y) {
+            params.x = clampedX
+            params.y = clampedY
+            windowManager.updateViewLayout(overlayView, params)
+            saveOverlayState()
+        }
+    }
+
     private fun saveOverlayState() {
         val prefs = getSharedPreferences("AppPrefs", MODE_PRIVATE)
         prefs.edit().apply {
@@ -159,8 +254,12 @@ class OverlayService : Service() {
                         initialTouchY = event.rawY
                     }
                     MotionEvent.ACTION_MOVE -> {
-                        params.x = initialX + (event.rawX - initialTouchX).toInt()
-                        params.y = initialY + (event.rawY - initialTouchY).toInt()
+                        val newX = initialX + (event.rawX - initialTouchX).toInt()
+                        val newY = initialY + (event.rawY - initialTouchY).toInt()
+
+                        val (clampedX, clampedY) = coerceToScreen(newX, newY)
+                        params.x = clampedX
+                        params.y = clampedY
                         windowManager.updateViewLayout(overlayView, params)
                     }
                     MotionEvent.ACTION_UP -> {
@@ -186,6 +285,7 @@ class OverlayService : Service() {
 
         override fun onScaleEnd(detector: ScaleGestureDetector) {
             super.onScaleEnd(detector)
+            clampToScreen()
             saveOverlayState()
         }
     }
